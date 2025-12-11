@@ -17,6 +17,7 @@ Pro spuštění automatizačních skriptů je vyžadován **PowerShell 7.x**. P�
 
 ### 🪟 Windows
 Nainstalujte nejnovější stabilní verzi pomocí jednoho z následujících příkazů:
+
 **WinGet**
 ```
 winget install --id Microsoft.PowerShell --source winget
