@@ -17,9 +17,13 @@ Pro spuštění automatizačních skriptů je vyžadován **PowerShell 7.x**. P�
 
 ### 🪟 Windows
 Nainstalujte nejnovější stabilní verzi pomocí jednoho z následujících příkazů:
-```
+```powershell
 winget install --id Microsoft.PowerShell --source winget
+```
+```Standardní instalace (zobrazí grafického průvodce):
 iex "& { $(irm [https://aka.ms/install-powershell.ps1](https://aka.ms/install-powershell.ps1)) } -UseMSI"
+```
+```Tichá instalace na pozadí (bez oken):
 iex "& { $(irm [https://aka.ms/install-powershell.ps1](https://aka.ms/install-powershell.ps1)) } -UseMSI -Quiet"
 ```
 
