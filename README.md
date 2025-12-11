@@ -10,3 +10,20 @@ Cílem této práce je navrhnout a implementovat sadu skriptů pro **PowerShell 
 * **Bezpečnost:** Automatizovaná správa přístupových práv a autentizace.
 
 📜 Bakalářská práce je dostupná na [Overleaf](https://overleaf.prf.ujep.cz/read/jrsqvjvpcnsy#87aa95).
+
+## 🛠 Instalace PowerShell
+
+Pro spuštění automatizačních skriptů je vyžadován **PowerShell 7.x**. Původní Windows PowerShell 5.1 není podporován.
+
+### 🪟 Windows
+Nainstalujte nejnovější stabilní verzi pomocí jednoho z následujících příkazů:
+```
+winget install --id Microsoft.PowerShell --source winget
+iex "& { $(irm [https://aka.ms/install-powershell.ps1](https://aka.ms/install-powershell.ps1)) } -UseMSI"
+iex "& { $(irm [https://aka.ms/install-powershell.ps1](https://aka.ms/install-powershell.ps1)) } -UseMSI -Quiet"
+```
+
+### 🐧 Linux / 🍎 macOS
+```
+curl -L [https://aka.ms/install-powershell.sh](https://aka.ms/install-powershell.sh) | sudo bash
+```
