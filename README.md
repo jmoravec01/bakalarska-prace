@@ -15,6 +15,7 @@ Cílem této práce je navrhnout a implementovat sadu skriptů pro **PowerShell 
 
 Pro spuštění automatizačních skriptů je vyžadován **PowerShell 7.x**. Původní Windows PowerShell 5.1 není podporován.
 
+
 ### 🪟 Windows
 Nainstalujte nejnovější stabilní verzi pomocí jednoho z následujících příkazů:
 
@@ -30,7 +31,12 @@ iex "& { $(irm [https://aka.ms/install-powershell.ps1](https://aka.ms/install-po
 ```
 iex "& { $(irm [https://aka.ms/install-powershell.ps1](https://aka.ms/install-powershell.ps1)) } -UseMSI -Quiet"
 ```
+
+> Bezpečnostní politika Windows ve výchozím nastavení blokuje spouštění skriptů. Pro umožnění běhu automatizačních nástrojů byla zvolena politika \texttt{RemoteSigned}, která povoluje lokální skripty bez omezení (aplikováno pouze na aktuálního uživatele): `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force`
+
 ### 🐧 Linux / 🍎 macOS
 ```
 curl -L [https://aka.ms/install-powershell.sh](https://aka.ms/install-powershell.sh) | sudo bash
 ```
+
+> Na systémech Linux a macOS se politika \texttt{ExecutionPolicy} neuplatňuje a příkaz pro její změnu není vyžadován. Bezpečnost je zde řízena na úrovni souborového systému. Pro spuštění skriptu stačí nastavit práva souboru standardním systémovým příkazem: `chmod +x nazev_skriptu.ps1`
