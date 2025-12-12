@@ -2,7 +2,15 @@
 # SKRIPT: setup.ps1
 # POPIS: Konfigurator prostredi (s interaktivni tabulkou profilu)
 # =============================================================================
-
+$MinVersion = [Version]"7.0"
+if ($PSVersionTable.PSVersion -lt $MinVersion) {
+    Clear-Host
+    Write-Host "--- CHYBA PROSTREDI ---" -ForegroundColor Red
+    Write-Host " [!] Tento skript vyzaduje PowerShell $MinVersion a novejsi." -ForegroundColor Yellow
+    Write-Host "     Vase verze: $($PSVersionTable.PSVersion)" -ForegroundColor Gray
+    Write-Host "     Prosim prepnete terminal pomoci 'pwsh' nebo aktualizujte."
+    exit
+}
 # 1. NASTAVENI KONZOLE
 function global:prompt { "PS " + (Split-Path -Leaf (Get-Location)) + "> " }
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
