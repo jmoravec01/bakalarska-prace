@@ -1,0 +1,24 @@
+{
+  "EsxiServer": "vsphere.esxi",
+  "Datastore": "asdfsadfsd",
+  "Network": "VM Network",
+  "IsoFolder": "ISOs",
+  "LocalIsoDir": "C:\\ISO",
+  "Profiles": {
+    "Mid": {
+      "RamMB": 4096,
+      "DiskGB": 50,
+      "CpuCount": 2
+    },
+    "High": {
+      "RamMB": 8192,
+      "DiskGB": 100,
+      "CpuCount": 4
+    },
+    "Low": {
+      "RamMB": 2048,
+      "DiskGB": 20,
+      "CpuCount": 1
+    }
+  }
+}
