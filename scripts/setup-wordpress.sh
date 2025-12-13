@@ -31,7 +31,6 @@ systemctl enable --now mariadb
 # --- 4. INSTALACE PHP 8.3 ---
 echo ">>> [3/7] Instalace PHP 8.3..."
 dnf module reset php -y
-# ZDE BYLA ZMENA: 8.2 -> 8.3
 dnf module enable php:remi-8.3 -y
 dnf install -y php php-fpm php-mysqlnd php-curl php-gd php-mbstring php-xml php-xmlrpc php-intl php-zip
 
