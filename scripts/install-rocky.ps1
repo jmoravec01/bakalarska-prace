@@ -1,20 +1,32 @@
+<#
+.SYNOPSIS
+   Automatizovana instalace Rocky Linux VM na VMware ESXi.
+   Pripraveno pro spousteni z Master Menu (relativni cesty).
+#>
+
 # =============================================================================
-# SKRIPT: Install-Rocky.ps1
-# POPIS: Automatizovane nasazeni VM (s vyuzitim config.json)
+# SKRIPT: Install-Rocky.ps1 (Variant: Config-Based)
+# POPIS:  Skript pro automatizovane nasazeni virtualniho serveru (VM) s OS Rocky Linux.
+#         Vyuziva konfiguracni soubor 'config.json' vygenerovany skriptem setup.ps1.
+#         Resi stazeni ISO obrazu, jeho upload na datastore (s animaci), vytvoreni VM
+#         dle hardwaroveho profilu a nastaveni BIOSu pro boot z CD-ROM.
+# AUTOR:  Jakub Moravec
+# DATUM:  2025
 # =============================================================================
 
-# 0. KONTROLA VERZE POWERSHELLU (POZADAVEK 7.0+)
+# -----------------------------------------------------------------------------
+# 0. KONTROLA PROSTREDI
+# -----------------------------------------------------------------------------
 $MinVersion = [Version]"7.0"
 if ($PSVersionTable.PSVersion -lt $MinVersion) {
-    Clear-Host
-    Write-Host "--- CHYBA PROSTREDI ---" -ForegroundColor Red
-    Write-Host " [!] Tento skript vyzaduje PowerShell $MinVersion a novejsi." -ForegroundColor Yellow
-    Write-Host "     Vase verze: $($PSVersionTable.PSVersion)" -ForegroundColor Gray
-    Write-Host "     Prosim prepnete terminal pomoci 'pwsh' nebo aktualizujte."
+    Write-Host " [!] Tento skript vyzaduje PowerShell $MinVersion a novejsi." -ForegroundColor Red;
+    Write-Host " RESENI: Do terminalu napiste prikaz 'pwsh' a stisknete Enter." -ForegroundColor Green
     exit
 }
 
-# 1. NASTAVENI PROSTREDI
+# -----------------------------------------------------------------------------
+# 1. INITIALIZACE A FUNKCE
+# -----------------------------------------------------------------------------
 function global:prompt { "PS " + (Split-Path -Leaf (Get-Location)) + "> " }
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
@@ -22,53 +34,65 @@ $ErrorActionPreference = "Stop"
 Clear-Host
 Write-Host "--- INSTALACE ROCKY LINUX (DEPLOYMENT) ---" -ForegroundColor Cyan
 
-# 2. NACTENI KONFIGURACE
-$ConfigFile = ".\config\config.json"
+# -----------------------------------------------------------------------------
+# 2. NACTENI KONFIGURACE (JSON) - OPRAVA PRO MASTER MENU
+# -----------------------------------------------------------------------------
+# Prikaz Join-Path $PSScriptRoot zajisti, ze hledame ve slozce "scripts/config",
+# i kdyz je aktualni pracovni adresar jinde (napr. v rootu projektu).
+
+# Zkousime standardni slozku 'config'
+$ConfigFile = Join-Path $PSScriptRoot "config\config.json"
+
+# Pojistka: Pokud neexistuje, zkusime alternativni slozku (pokud jste ji prejmenovali na 'confif')
+if (-not (Test-Path $ConfigFile)) {
+    $ConfigFileAlt = Join-Path $PSScriptRoot "confif\config.json"
+    if (Test-Path $ConfigFileAlt) { $ConfigFile = $ConfigFileAlt }
+}
 
 if (Test-Path $ConfigFile) {
     try {
         $Config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
         Write-Host " [INIT] Konfigurace nactena (Server: $($Config.EsxiServer))." -ForegroundColor Gray
     }
-    catch { Write-Host " [CHYBA] Config poskozen." -ForegroundColor Red; exit }
+    catch { Write-Host " [CHYBA] Config soubor je poskozeny." -ForegroundColor Red; exit }
 }
 else {
-    Write-Host " [CHYBA] Nenalezen config.json! Spustte nejprve setup.ps1." -ForegroundColor Red; exit
+    Write-Host " [CHYBA] Nenalezen config.json!" -ForegroundColor Red
+    Write-Host "         Hledal jsem zde: $ConfigFile" -ForegroundColor Gray
+    Write-Host "         Nejprve spustte setup.ps1 pro vygenerovani konfigurace." -ForegroundColor Yellow
+    exit
 }
 
-# 3. PRIPOJENI K SERVERU (S OPAKOVANIM)
+# -----------------------------------------------------------------------------
+# 3. PRIPOJENI K ESXi SERVERU
+# -----------------------------------------------------------------------------
 if ($global:DefaultVIServer -and $global:DefaultVIServer.IsConnected) {
     Write-Host " [OK] Pripojeno k: $($global:DefaultVIServer.Name)" -ForegroundColor Green
 }
 else {
     Write-Host " [INFO] Navazuji spojeni s '$($Config.EsxiServer)'..." -ForegroundColor Yellow
     
-    # Nekonecna smycka pro prihlasovani
     while ($true) {
         try {
-            # Pokus o pripojeni
             Connect-VIServer -Server $Config.EsxiServer -ErrorAction Stop | Out-Null
             Write-Host " [OK] Uspesne pripojeno." -ForegroundColor Green
-            break # Pripojeni se povedlo, vyskocime ze smycky
+            break 
         }
         catch {
             Write-Host " [CHYBA] Pripojeni selhalo!" -ForegroundColor Red
             Write-Host " Duvod: $_" -ForegroundColor Gray
             
-            # Zeptame se uzivatele, co dal
             Write-Host "`nZadali jste spravne heslo? Bezi VPN?" -ForegroundColor Yellow
             $Retry = Read-Host "Zkusit znovu? [A]no / [N]e (Enter = Ano)"
-            
-            if ($Retry.ToUpper() -eq "N") {
-                Write-Host "Ukoncuji skript." -ForegroundColor Gray
-                exit
-            }
+            if ($Retry.ToUpper() -eq "N") { exit }
             Write-Host "Opakuji pokus..." -ForegroundColor Cyan
         }
     }
 }
 
-# 4. ZJISTENI DOSTUPNYCH VERZI
+# -----------------------------------------------------------------------------
+# 4. DETEKCE VERZI ROCKY LINUX
+# -----------------------------------------------------------------------------
 Write-Host "`nZjistuji aktualni verze z repozitare..." -ForegroundColor Gray
 
 function Get-RockyVersion {
@@ -86,7 +110,9 @@ $Ver10 = Get-RockyVersion -MajorVer "10"
 $Ver9  = Get-RockyVersion -MajorVer "9"
 $Ver8  = Get-RockyVersion -MajorVer "8"
 
-# 5. VYBER VERZE A EDICE
+# -----------------------------------------------------------------------------
+# 5. INTERAKTIVNI VYBER VERZE A EDICE
+# -----------------------------------------------------------------------------
 Write-Host "`nDostupne verze (Enterprise LTS):"
 Write-Host " [1] Rocky Linux $Ver10 (Experimental)" -ForegroundColor Magenta
 Write-Host " [2] Rocky Linux $Ver9  (Doporuceno)" -ForegroundColor Green
@@ -103,41 +129,35 @@ switch ($VerChoice) {
 }
 
 Write-Host "`nVyberte edici (ISO):"
-Write-Host " [M] Minimal" -ForegroundColor Cyan
-Write-Host " [B] Boot " -ForegroundColor Yellow
-Write-Host " [D] DVD " -ForegroundColor Gray
+Write-Host " [M] Minimal (Doporuceno pro servery)" -ForegroundColor Cyan
+Write-Host " [B] Boot    (Pouze pro sitovou instalaci)" -ForegroundColor Yellow
+Write-Host " [D] DVD     (Plna verze se vsemi balicky)" -ForegroundColor Gray
 
 $TypeInput = Read-Host "Vase volba [Enter = M]"
 if ([string]::IsNullOrWhiteSpace($TypeInput)) { $TypeInput = "M" }
 
 switch ($TypeInput.ToUpper()) {
-    "B" { 
-        $IsoSuffix = "boot"
-        $IsoType = "Boot/NetInstall" 
-    }
-    "D" { 
-        $IsoSuffix = "dvd"
-        $IsoType = "DVD/Full" 
-    }
-    Default { 
-        $IsoSuffix = "minimal"
-        $IsoType = "Minimal" 
-    }
+    "B" { $IsoSuffix = "boot"; $IsoType = "Boot/NetInstall" }
+    "D" { $IsoSuffix = "dvd";  $IsoType = "DVD/Full" }
+    Default { $IsoSuffix = "minimal"; $IsoType = "Minimal" }
 }
 
-# Info o vyberu
 Write-Host "`n--------------------------------------------------" -ForegroundColor Cyan
 Write-Host " [INFO] Vybrano: Rocky Linux $SelectedFullVer ($IsoType)" -ForegroundColor Green
 Write-Host "--------------------------------------------------" -ForegroundColor Cyan
 
-# 6. LOGIKA ISO (AUTOMATICKA S UKAZATELEM PRUBEHU)
+# -----------------------------------------------------------------------------
+# 6. SPRAVA ISO SOUBORU (DOWNLOAD & UPLOAD)
+# -----------------------------------------------------------------------------
 $IsoFileName = "Rocky-$SelectedMajor-latest-x86_64-$IsoSuffix.iso"
-
-# Mirror CVUT (Silicon Hill) - Rychlost + Spolehlivost
 $DownloadUrl = "http://ftp.sh.cvut.cz/rocky/$SelectedMajor/isos/x86_64/$IsoFileName"
-$LocalPath   = Join-Path $Config.LocalIsoDir $IsoFileName
 
+# Cesta pro docasne stazeni (vedle tohoto skriptu nebo do tempu)
+$LocalPath   = Join-Path $PSScriptRoot $IsoFileName
+
+# Mapovani Datastore
 $DatastoreObj = Get-Datastore -Name $Config.Datastore
+if (Get-PSDrive -Name "ds" -ErrorAction SilentlyContinue) { Remove-PSDrive -Name "ds" }
 New-PSDrive -Name "ds" -PSProvider VimDatastore -Root "\" -Location $DatastoreObj -ErrorAction SilentlyContinue | Out-Null
 $RemoteFolder = "ds:\$($Config.IsoFolder)"
 $RemoteIsoPath = "$RemoteFolder\$IsoFileName"
@@ -145,71 +165,82 @@ $RemoteIsoPath = "$RemoteFolder\$IsoFileName"
 Write-Host "`n--- Sprava ISO souboru ---" -ForegroundColor Cyan
 Write-Host " [INFO] Mirror: Silicon Hill (CVUT Praha)." -ForegroundColor Magenta
 
-# KROK 1: Kontrola/Vytvoreni slozky na serveru
+# KROK A: Kontrola adresare na serveru
 if (!(Test-Path $RemoteFolder)) { 
     try {
         New-Item -ItemType Directory -Path $RemoteFolder -ErrorAction Stop | Out-Null 
     }
     catch {
-        Write-Host " [POZOR] Nelze vytvorit slozku automaticky (Omezeni Free Licence)." -ForegroundColor Yellow
-        Write-Host "         Akce: Jdete na https://$($Config.EsxiServer) -> Storage -> Datastore Browser" -ForegroundColor Gray
-        Write-Host "         Vytvorte slozku: '$($Config.IsoFolder)'" -ForegroundColor Gray
+        Write-Host " [POZOR] Nelze automaticky vytvorit slozku (pravdepodobne Free Licence)." -ForegroundColor Yellow
+        Write-Host "         Prosim vytvorte slozku '$($Config.IsoFolder)' manualne pres webove rozhrani." -ForegroundColor Gray
         Read-Host "         [Jakmile slozku vytvorite, stisknete ENTER]"
     }
 }
 
-# KROK 2: Logika stahovani a nahravani
+# KROK B: Logika stahovani a nahravani
 if (Test-Path $RemoteIsoPath) {
     Write-Host " [OK] ISO soubor jiz existuje na ESXi. Preskakuji stahovani." -ForegroundColor Green
 }
 else {
-    # A) Stazeni do PC (S progress barem)
+    # 1. Stazeni do lokalni mezipameti (PC)
     if (-not (Test-Path $LocalPath)) {
-        Write-Host " [INFO] Stahuji ISO do PC..." -ForegroundColor Yellow
-        Write-Host "        Zdroj: $DownloadUrl" -ForegroundColor Gray
-        
-        $LDir = [System.IO.Path]::GetDirectoryName($LocalPath)
-        if (!(Test-Path $LDir)) { New-Item -ItemType Directory -Path $LDir | Out-Null }
+        Write-Host " [INFO] Stahuji ISO do PC (Cache)..." -ForegroundColor Yellow
         
         try {
-            # Invoke-WebRequest v PowerShell 7+ ukazuje progress bar a je rychly
             Invoke-WebRequest -Uri $DownloadUrl -OutFile $LocalPath
             Write-Host " [OK] Stazeno uspesne." -ForegroundColor Green
         }
         catch {
-            Write-Host " [CHYBA] Stahovani z CVUT selhalo ($($_))." -ForegroundColor Red
-            Write-Host "         Zkousim oficialni zalozni server..." -ForegroundColor Yellow
-            
-            # Fallback na oficialni server
+            Write-Host " [CHYBA] Mirror CVUT nedostupny. Prepinam na oficialni zdroj..." -ForegroundColor Red
             $BackupUrl = "https://download.rockylinux.org/pub/rocky/$SelectedMajor/isos/x86_64/$IsoFileName"
             try {
                 Invoke-WebRequest -Uri $BackupUrl -OutFile $LocalPath
                 Write-Host " [OK] Stazeno (Backup Mirror)." -ForegroundColor Green
-            } catch {
-                 Write-Host " [FATAL] Stahovani selhalo uplne." -ForegroundColor Red; exit
-            }
+            } catch { Write-Host " [FATAL] Stahovani selhalo uplne." -ForegroundColor Red; exit }
         }
     } else {
-        Write-Host " [INFO] ISO nalezeno v cache PC." -ForegroundColor Gray
+        Write-Host " [INFO] ISO nalezeno v lokalni cache PC." -ForegroundColor Gray
     }
 
-    # B) Automaticky Upload (Pomaly, ale bez prace)
+    # 2. Upload na ESXi s animaci
     Write-Host " [INFO] Nahravam ISO na server..." -ForegroundColor Yellow
-    Write-Host "        (Tato operace trva dele kvuli limitum ESXi API. Prosim cekejte...)" -ForegroundColor Gray
+    Write-Host "        (Progress Bar sledujte v zahlavi okna)" -ForegroundColor Gray
     
     try {
-        Copy-DatastoreItem -Item $LocalPath -Destination $RemoteIsoPath -Force -ErrorAction Stop
-        Write-Host " [OK] Nahrano na server." -ForegroundColor Green
+        $StopWatch = New-Object System.Diagnostics.Stopwatch
+        $StopWatch.Start()
+
+        $Job = Start-ThreadJob -ScriptBlock {
+            param($Src, $Dst)
+            Copy-DatastoreItem -Item $Src -Destination $Dst -Force -ErrorAction Stop
+        } -ArgumentList $LocalPath, $RemoteIsoPath
+
+        $Anim = "|", "/", "-", "\"
+        $i = 0
+        while ($Job.State -eq 'Running') {
+            $Time = $StopWatch.Elapsed.ToString("mm\:ss")
+            Write-Host -NoNewline "`r [UPLOAD] $($Anim[$i++ % 4]) Cas: $Time "
+            Start-Sleep -Milliseconds 200
+        }
         
-        Write-Host " [CLEANUP] Mazu lokalni ISO z PC..." -ForegroundColor Magenta
+        Receive-Job -Job $Job -Wait -ErrorAction SilentlyContinue | Out-Null
+        
+        if ($Job.JobStateInfo.State -eq 'Failed') { throw $Job.JobStateInfo.Reason }
+        
+        $StopWatch.Stop()
+        Write-Host -NoNewline "`r [OK] Uspesne nahrano. Cas: $($StopWatch.Elapsed.ToString("mm\:ss"))      `n" -ForegroundColor Green
+        
+        # Uklid lokalniho disku
         Remove-Item -Path $LocalPath -Force
-        Write-Host " [OK] Smazano." -ForegroundColor Green
+        Write-Host " [CLEANUP] Docasne ISO smazano z PC." -ForegroundColor Green
     }
     catch {
-        Write-Host " [CHYBA] Automaticky upload selhal (Omezeni Free Licence)." -ForegroundColor Red
-        Write-Host "         Akce: Jdete na https://$($Config.EsxiServer) -> Datastore Browser" -ForegroundColor Yellow
-        Write-Host "         Nahrajte soubor '$IsoFileName' do slozky '$($Config.IsoFolder)' manualne." -ForegroundColor Yellow
+        Write-Host "`n [CHYBA] Automaticky upload selhal." -ForegroundColor Red
+        Write-Host "         Manualni akce: Nahrajte '$IsoFileName' do slozky '$($Config.IsoFolder)' pres Datastore Browser." -ForegroundColor Yellow
+        
+        # Otevreme slozku s ISO, aby to uzivatel nasel
         Invoke-Item (Split-Path $LocalPath)
+        
         Read-Host "         [Jakmile ISO nahrajete, stisknete ENTER pro pokracovani]"
         
         if ((Read-Host "Smazat ISO z PC nyni? [A]no/[N]e").ToUpper() -eq "A") {
@@ -220,9 +251,9 @@ else {
 
 Remove-PSDrive -Name "ds" -ErrorAction SilentlyContinue
 
-# 7. VYBER HARDWAROVEHO PROFILU (S TABULKOU)
-
-# --- DEFINICE FUNKCE PRO TABULKU ---
+# -----------------------------------------------------------------------------
+# 7. VYBER HARDWAROVEHO PROFILU
+# -----------------------------------------------------------------------------
 function Show-ProfileTable {
     param($Conf)
     $TableData = @()
@@ -237,12 +268,9 @@ function Show-ProfileTable {
     }
     $TableData | Format-Table -AutoSize
 }
-# -----------------------------------
 
 Write-Host "`n--- Konfigurace Virtualniho Stroje ---" -ForegroundColor Cyan
-Write-Host "Dostupne profily (dle setup.ps1):" -ForegroundColor Gray
-
-# Zobrazeni tabulky pomoci funkce
+Write-Host "Dostupne profily (definovane v setup.ps1):" -ForegroundColor Gray
 Show-ProfileTable -Conf $Config
 
 Write-Host "Moznosti: [L]ow, [M]id, [H]igh" -ForegroundColor Yellow
@@ -255,10 +283,23 @@ switch ($ProfileChoice.ToUpper()) {
     Default { $Hw = $Config.Profiles.Mid; $Suffix="mid" }
 }
 
-# 8. VYTVORENI VM
+# -----------------------------------------------------------------------------
+# 8. VYTVORENI VM A KONFIGURACE BOOTU
+# -----------------------------------------------------------------------------
 $DefaultName = "Rocky-$SelectedMajor-$Suffix"
-$VMNameInput = Read-Host "`nZadejte nazev serveru (Enter = $DefaultName)"
-if ([string]::IsNullOrWhiteSpace($VMNameInput)) { $VMNameInput = $DefaultName }
+
+# Smycka pro zajisteni unikatniho nazvu VM
+while ($true) {
+    $VMNameInput = Read-Host "`nZadejte nazev serveru (Enter = $DefaultName)"
+    if ([string]::IsNullOrWhiteSpace($VMNameInput)) { $VMNameInput = $DefaultName }
+
+    $Exists = Get-VM -Name $VMNameInput -ErrorAction SilentlyContinue
+    if ($Exists) {
+        Write-Host " [!] CHYBA: Server s nazvem '$VMNameInput' jiz existuje!" -ForegroundColor Red
+        Write-Host "     Prosim zvolte jiny nazev." -ForegroundColor Yellow
+    }
+    else { break }
+}
 
 if ($SelectedMajor -eq "10") { $GuestID = "rhel9_64Guest" } else { $GuestID = "rhel$($SelectedMajor)_64Guest" }
 
@@ -266,18 +307,47 @@ Write-Host "Vytvarim VM: $VMNameInput..." -ForegroundColor Yellow
 Write-Host " - Sit: $($Config.Network) | Datastore: $($Config.Datastore)" -ForegroundColor Gray
 
 try {
+    # 1. Vytvoreni virtualniho stroje
     $NewVM = New-VM -Name $VMNameInput `
-           -MemoryMB $Hw.RamMB `
-           -NumCpu $Hw.CpuCount `
-           -DiskGB $Hw.DiskGB `
-           -Datastore $Config.Datastore `
-           -NetworkName $Config.Network `
-           -GuestId $GuestID
+            -MemoryMB $Hw.RamMB `
+            -NumCpu $Hw.CpuCount `
+            -DiskGB $Hw.DiskGB `
+            -Datastore $Config.Datastore `
+            -NetworkName $Config.Network `
+            -GuestId $GuestID `
+            -ErrorAction Stop
 
+    # 2. Pripojeni ISO obrazu do CD-ROM
     $IsoPathForEsxi = "[$($Config.Datastore)] $($Config.IsoFolder)/$IsoFileName"
-    New-CDDrive -VM $NewVM -IsoPath $IsoPathForEsxi -StartConnected $true | Out-Null
+    
+    $ExistingCd = Get-CDDrive -VM $NewVM -ErrorAction SilentlyContinue
+    if ($ExistingCd) {
+        Set-CDDrive -CD $ExistingCd -IsoPath $IsoPathForEsxi -StartConnected:$true -Confirm:$false -ErrorAction Stop | Out-Null
+    } else {
+        New-CDDrive -VM $NewVM -IsoPath $IsoPathForEsxi -StartConnected:$true -Confirm:$false -ErrorAction Stop | Out-Null
+    }
 
-    Start-VM -VM $NewVM | Out-Null
-    Write-Host "`n[HOTOVO] Server $VMNameInput bezi!" -ForegroundColor Green
+    # 3. Vynuceni Boot Order na CD-ROM (BIOS/EFI)
+    Write-Host " - Konfigurace BIOS Boot Order (Vynuceni CD-ROM)..." -ForegroundColor Gray
+    $Spec = New-Object VMware.Vim.VirtualMachineConfigSpec
+    $Spec.BootOptions = New-Object VMware.Vim.VirtualMachineBootOptions
+    $Spec.BootOptions.BootOrder = @(New-Object VMware.Vim.VirtualMachineBootOptionsBootableCdromDevice)
+    $NewVM.ExtensionData.ReconfigVM($Spec)
+
+    Write-Host " [HOTOVO] VM vytvorena a pripravena k instalaci." -ForegroundColor Green
+
+    # 4. Volba okamziteho spusteni
+    $StartChoice = Read-Host "`nSpustit server nyni? [A]no / [N]e (Enter = Ano)"
+    
+    if ([string]::IsNullOrWhiteSpace($StartChoice) -or $StartChoice.ToUpper() -eq "A") {
+        Write-Host "Startuji $VMNameInput..." -ForegroundColor Yellow
+        Start-VM -VM $NewVM -ErrorAction Stop | Out-Null
+        Write-Host " [OK] Server bezi. Otevrete konzoli pro instalaci." -ForegroundColor Green
+    } else {
+        Write-Host " [OK] Server ponechan ve vypnutem stavu." -ForegroundColor Gray
+    }
 }
-catch { Write-Host "`n[CHYBA] $_" -ForegroundColor Red }
+catch { 
+    Write-Host "`n[CHYBA] $_" -ForegroundColor Red
+    if ($NewVM) { Write-Host " [INFO] VM byla vytvorena, ale nastala chyba pri konfiguraci. Zkontrolujte ji v ESXi." -ForegroundColor Gray }
+}

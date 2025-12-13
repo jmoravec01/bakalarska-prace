@@ -1,3 +1,9 @@
+<#
+.SYNOPSIS
+   Konfiguracni pruvodce (Setup Wizard).
+   Generuje 'config.json' pro ostatni skripty.
+#>
+
 # =============================================================================
 # SKRIPT: setup.ps1
 # POPIS: Konfiguracni pruvodce pro pripravu prostredi pred nasazenim VM.
@@ -10,10 +16,11 @@
 # -----------------------------------------------------------------------------
 # 0. KONTROLA PROSTREDI
 # -----------------------------------------------------------------------------
-# Vyaduje PowerShell Core (verze 7.0 a vyssi) kvuli modernim funkcim a kompatibilite.
 $MinVersion = [Version]"7.0"
 if ($PSVersionTable.PSVersion -lt $MinVersion) {
-    Write-Host " [!] Tento skript vyzaduje PowerShell $MinVersion a novejsi." -ForegroundColor Red; exit
+    Write-Host " [!] Tento skript vyzaduje PowerShell $MinVersion a novejsi." -ForegroundColor Red;
+    Write-Host " RESENI: Do terminalu napiste prikaz 'pwsh' a stisknete Enter." -ForegroundColor Green
+    exit
 }
 
 # -----------------------------------------------------------------------------
@@ -23,8 +30,6 @@ function global:prompt { "PS " + (Split-Path -Leaf (Get-Location)) + "> " }
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Funkce: Read-IntSafe
-# Ucel:   Zajistuje bezpecne nacitani ciselnych vstupu od uzivatele.
-#         Zabrani padu skriptu, pokud uzivatel zada text misto cisla.
 function Read-IntSafe {
     param ($Label, $DefaultVal)
     while ($true) {
@@ -39,7 +44,6 @@ function Read-IntSafe {
 }
 
 # Funkce: Show-ProfileTable
-# Ucel:   Vykresli prehlednou tabulku hardwarovych profilu (CPU/RAM/Disk).
 function Show-ProfileTable {
     param($Conf)
     $TableData = @()
@@ -61,8 +65,6 @@ Write-Host "--- KONFIGURACE PROSTREDI (SETUP) ---" -ForegroundColor Cyan
 # -----------------------------------------------------------------------------
 # 2. DEFINICE SABLONY KONFIGURACE
 # -----------------------------------------------------------------------------
-# Vytvarime objekt $Config s vychozimi hodnotami. Tyto hodnoty budou
-# v prubehu skriptu upravovany podle voleb uzivatele.
 $Config = [Ordered]@{
     EsxiServer = "vsphere.esxi"
     Datastore  = "datastore1"
@@ -84,7 +86,6 @@ if (-not [string]::IsNullOrWhiteSpace($InputServer)) { $Config.EsxiServer = $Inp
 
 Write-Host "Pripojuji se k serveru..." -ForegroundColor Gray
 try {
-    # Kontrola, zda uz nejsme pripojeni, abychom nezdrzovali
     if (-not ($global:DefaultVIServer -and $global:DefaultVIServer.IsConnected)) { 
         Connect-VIServer -Server $Config.EsxiServer -ErrorAction Stop | Out-Null 
     }
@@ -95,11 +96,8 @@ catch { Write-Host " [CHYBA] Server nedostupny." -ForegroundColor Red }
 # -----------------------------------------------------------------------------
 # 4. DETEKCE DISKU A VYBER DATASTORE
 # -----------------------------------------------------------------------------
-# Tato sekce resi vyber uloziste pro VM. Umoznuje vybrat existujici datastore
-# nebo vytvorit novy z volnych fyzickych disku.
 if ($global:DefaultVIServer) {
     while ($true) {
-        # Nacteni existujicich datastore
         $CurrentDatastores = Get-Datastore | Sort-Object Name
         
         Write-Host "`nExistujici uloziste (Datastores):" -ForegroundColor Cyan
@@ -120,22 +118,18 @@ if ($global:DefaultVIServer) {
             Write-Host "Analyzuji disky..." -ForegroundColor Gray
             $VMHost = Get-VMHost
             
-            # 1. Zjisteni systemoveho disku (Boot Device) pomoci ESXCLI
-            # Toto je bezpecnostni prvek, abychom omylem nesmazali disk s OS ESXi.
             try {
                 $EsxCli = Get-EsxCli -VMHost $VMHost -V2
                 $BootInfo = $EsxCli.system.boot.device.get.Invoke()
                 $BootDevName = $BootInfo.deviceName
             } catch { $BootDevName = "UNKNOWN" }
 
-            # 2. Zjisteni disku, ktere uz jsou soucasti jinych datastore
             $UsedLunNames = @()
             foreach ($ds in $CurrentDatastores) {
                 $Extents = $ds.ExtensionData.Info.Vmfs.Extent
                 if ($Extents) { foreach ($ex in $Extents) { $UsedLunNames += $ex.DiskName } }
             }
 
-            # 3. Nacteni vsech fyzickych disku (LUNs)
             $AllLuns = Get-ScsiLun -VmHost $VMHost -LunType disk
             
             Write-Host "`nSEZNAM FYZICKYCH DISKU:" -ForegroundColor Cyan
@@ -146,11 +140,9 @@ if ($global:DefaultVIServer) {
                 $CapGB = [math]::round($lun.CapacityGB, 2)
                 $IsSafe = $true
                 
-                # Porovnani ID disku s BootDevice a seznamem pouzitych
                 $IsSystem = ($lun.CanonicalName -match $BootDevName)
                 $IsUsed = $UsedLunNames -contains $lun.CanonicalName
 
-                # Nastaveni barev a stitku pro uzivatele
                 if ($IsSystem) {
                     $Status = "[SYSTEM - BOOT?]"
                     $Color = "Red"; $IsSafe = $false
@@ -167,19 +159,16 @@ if ($global:DefaultVIServer) {
                 Write-Host " [$k] $Status Model: $($lun.Model) | Kapacita: $CapGB GB" -ForegroundColor $Color
                 Write-Host "     ID: $($lun.CanonicalName)" -ForegroundColor DarkGray
                 
-                # Ulozeni do pomocne tabulky pro pozdejsi vyber
                 $SelectableLuns[$k] = @{ Lun = $lun; IsSafe = $IsSafe; IsSystem = $IsSystem }
                 $k++
             }
 
-            # Vyber disku uzivatelem
             $LunIndex = Read-IntSafe -Label "Vyberte cislo disku k naformatovani" -DefaultVal 0
             
             if ($SelectableLuns.ContainsKey($LunIndex)) {
                 $Selection = $SelectableLuns[$LunIndex]
                 $SelectedLun = $Selection.Lun
                 
-                # Bezpecnostni varovani (Override)
                 if ($Selection.IsSystem) {
                     Write-Host "`n [!!! VAROVANI - SYSTEMOVY DISK !!!]" -ForegroundColor Red
                     $Confirm = Read-Host "Pokud jste si jisti, ze je to volny disk, napiste 'SMAZAT'"
@@ -187,11 +176,10 @@ if ($global:DefaultVIServer) {
                     Write-Host " [OK] Ochrana potlacena." -ForegroundColor Magenta
                 }
                 elseif (-not $Selection.IsSafe) {
-                     Write-Host " [POZOR] Disk je jiz pouzivan." -ForegroundColor Yellow
-                     if ((Read-Host "Premazat? [A]no/[N]e").ToUpper() -ne "A") { continue }
+                      Write-Host " [POZOR] Disk je jiz pouzivan." -ForegroundColor Yellow
+                      if ((Read-Host "Premazat? [A]no/[N]e").ToUpper() -ne "A") { continue }
                 }
 
-                # Vytvoreni datastore (Formatovani na VMFS 6)
                 $NewDsName = Read-Host "Zadejte nazev noveho datastore (napr. datastore1)"
                 if (-not [string]::IsNullOrWhiteSpace($NewDsName)) {
                     try {
@@ -209,7 +197,6 @@ if ($global:DefaultVIServer) {
             break 
         }
         else {
-             # Automaticky vyber pokud uzivatel jen odklepne Enter
              if ([string]::IsNullOrWhiteSpace($Choice) -and $CurrentDatastores.Count -gt 0) {
                  $Config.Datastore = $CurrentDatastores[0].Name
                  Write-Host " [OK] Automaticky vybran: $($Config.Datastore)" -ForegroundColor Green
@@ -222,7 +209,6 @@ if ($global:DefaultVIServer) {
 # -----------------------------------------------------------------------------
 # 5. EDITACE HARDWAROVYCH PROFILU
 # -----------------------------------------------------------------------------
-# Umoznuje upravit parametry (RAM, CPU, HDD) pro jednotlive velikosti VM.
 Write-Host "`n--- HARDWAROVE PROFILY ---" -ForegroundColor Cyan
 $Editing = $true
 while ($Editing) {
@@ -253,20 +239,17 @@ while ($Editing) {
 # -----------------------------------------------------------------------------
 Write-Host "`n--- SYSTEMOVA NASTAVENI ---" -ForegroundColor Cyan
 
-# A) Konfigurace site (Port Groups)
+# A) Konfigurace site
 if ($global:DefaultVIServer) {
-    # Zajistime, ze se snazime primarne nabidnout "VM Network"
     if ($Config.Network -ne "VM Network") {
          $CheckPg = Get-VirtualPortGroup -Name "VM Network" -ErrorAction SilentlyContinue
          if ($CheckPg) { $Config.Network = "VM Network" }
     }
 
-    # Cyklus pro spravu siti (umoznuje vytvorit novou a hned ji videt v seznamu)
     while ($true) {
         Write-Host "`nNacitam site..." -ForegroundColor Gray
         $PortGroups = Get-VirtualPortGroup | Sort-Object Name
         
-        # Logika pro nalezeni vychozi site v seznamu
         $DefaultPg = ($PortGroups | Where-Object Name -eq $Config.Network)
         if (-not $DefaultPg) { $DefaultPg = ($PortGroups | Where-Object Name -eq "VM Network") }
         if (-not $DefaultPg) { $DefaultPg = $PortGroups[0] }
@@ -286,7 +269,6 @@ if ($global:DefaultVIServer) {
         $NetChoice = Read-Host "Vyber (Enter = $DefaultIndex - $($DefaultPg.Name))"
         
         if ([string]::IsNullOrWhiteSpace($NetChoice)) { 
-            # Uzivatel stiskl Enter -> Pouzijeme default
             if ($DefaultPg) {
                 $Config.Network = $DefaultPg.Name
                 Write-Host " [OK] Vybrana sit: $($Config.Network)" -ForegroundColor Green
@@ -294,15 +276,15 @@ if ($global:DefaultVIServer) {
             }
         }
         elseif ($NetChoice.ToUpper() -eq "N") {
-            # Vytvoreni nove site s VLAN ID
             $NewNetName = Read-Host "Nazev site"; $Vid = Read-IntSafe "VLAN ID" 0
             try {
-                New-VirtualPortGroup -VirtualSwitch (Get-VirtualSwitch|Select -First 1) -Name $NewNetName -VLanId $Vid -ErrorAction Stop | Out-Null
+                # ZDE BYLA CHYBA: Select -> Select-Object
+                $VSwitch = Get-VirtualSwitch | Select-Object -First 1
+                New-VirtualPortGroup -VirtualSwitch $VSwitch -Name $NewNetName -VLanId $Vid -ErrorAction Stop | Out-Null
                 Write-Host " [OK] Vytvoreno. Aktualizuji seznam..." -ForegroundColor Green
             } catch { Write-Host " [CHYBA] $_" -ForegroundColor Red }
         }
         elseif ($ChoiceNum = [int]$NetChoice -as [int]) {
-            # Uzivatel vybral cislo
             if ($PortGroups[$ChoiceNum-1]) { 
                 $Config.Network = $PortGroups[$ChoiceNum-1].Name 
                 Write-Host " [OK] Vybrana sit: $($Config.Network)" -ForegroundColor Green
@@ -313,7 +295,7 @@ if ($global:DefaultVIServer) {
     }
 }
 
-# B) Cesty k ISO souborum
+# B) Cesty k ISO
 $InputIso = Read-Host "`nSlozka pro ISO v PC [$($Config.LocalIsoDir)]"
 if (-not [string]::IsNullOrWhiteSpace($InputIso)) { $Config.LocalIsoDir = $InputIso }
 if (-not (Test-Path $Config.LocalIsoDir)) { New-Item -ItemType Directory -Path $Config.LocalIsoDir | Out-Null }
@@ -322,11 +304,17 @@ $InputRemote = Read-Host "Slozka na Datastore pro ISO [$($Config.IsoFolder)]"
 if (-not [string]::IsNullOrWhiteSpace($InputRemote)) { $Config.IsoFolder = $InputRemote }
 
 # -----------------------------------------------------------------------------
-# 7. ULOZENI KONFIGURACE (EXPORT)
+# 7. ULOZENI KONFIGURACE (EXPORT - OPRAVA PRO MASTER MENU)
 # -----------------------------------------------------------------------------
-# Ulozi vsechna nastaveni do JSON souboru pro pouziti v dalsim kroku (instalace).
-$ConfigDir = ".\config"; if (-not (Test-Path $ConfigDir)) { New-Item -ItemType Directory -Path $ConfigDir | Out-Null }
+# Cesta: ./scripts/config
+$ConfigDir = Join-Path $PSScriptRoot "config"
+
+# Vytvorime slozku config, pokud neexistuje
+if (-not (Test-Path $ConfigDir)) { New-Item -ItemType Directory -Path $ConfigDir | Out-Null }
+
+# Cesta k souboru: ./scripts/config/config.json
 $FullPath = Join-Path $ConfigDir "config.json"
+
 $Config | ConvertTo-Json -Depth 5 | Set-Content -Path $FullPath -Encoding UTF8 -Force
 
 Write-Host "`n[OK] Ulozeno: $FullPath" -ForegroundColor Green

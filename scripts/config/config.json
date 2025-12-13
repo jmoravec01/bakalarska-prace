@@ -10,15 +10,15 @@
       "DiskGB": 20,
       "RamMB": 2048
     },
-    "High": {
-      "CpuCount": 4,
-      "DiskGB": 100,
-      "RamMB": 8192
-    },
     "Mid": {
       "CpuCount": 2,
       "DiskGB": 50,
       "RamMB": 4096
+    },
+    "High": {
+      "CpuCount": 4,
+      "DiskGB": 100,
+      "RamMB": 8192
     }
   }
 }
