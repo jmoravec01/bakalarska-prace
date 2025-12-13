@@ -1,7 +1,8 @@
 #!/bin/bash
 # =============================================================================
 # SKRIPT: setup-wordpress.sh
-# ZDROJ: wiki.crowncloud.net (LEMP + WordPress on Rocky Linux 9)
+# ZDROJ: wiki.crowncloud.net (LEMP + WordPress)
+# UPRAVA: PHP verze 8.3
 # =============================================================================
 
 # Zastavit skript při jakékoliv chybě
@@ -11,7 +12,6 @@ set -e
 DB_NAME="wordpress"
 DB_USER="admin"
 DB_PASS="admin"
-DOMAIN="_"  # _ znamena "jakakoliv domena/IP"
 
 # --- 2. UPDATE SYSTEMU & REPOZITARE ---
 echo ">>> [1/7] Aktualizace a Repozitare (EPEL + REMI)..."
@@ -28,10 +28,11 @@ dnf install -y nginx mariadb-server mariadb
 systemctl enable --now nginx
 systemctl enable --now mariadb
 
-# --- 4. INSTALACE PHP 8.2 (Dle doporuceni pro WP) ---
-echo ">>> [3/7] Instalace PHP 8.2..."
+# --- 4. INSTALACE PHP 8.3 ---
+echo ">>> [3/7] Instalace PHP 8.3..."
 dnf module reset php -y
-dnf module enable php:remi-8.2 -y
+# ZDE BYLA ZMENA: 8.2 -> 8.3
+dnf module enable php:remi-8.3 -y
 dnf install -y php php-fpm php-mysqlnd php-curl php-gd php-mbstring php-xml php-xmlrpc php-intl php-zip
 
 # DULEZITE: PHP-FPM na Rocky Linuxu bezi defaultne jako 'apache'.
