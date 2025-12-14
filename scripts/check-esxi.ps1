@@ -120,4 +120,4 @@ if ($VMs.Count -eq 0) {
     $VMList | Format-Table -AutoSize
 }
 
-Write-Host "`n Kontrola dokoncena." -ForegroundColor Cyanssh 
+Write-Host "`n Kontrola dokoncena." -ForegroundColor Cyan
