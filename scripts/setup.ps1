@@ -105,7 +105,7 @@ while ($true) {
     }
 
     # KROK C: Prihlaseni (jen pokud prosly testy)
-    Write-Host " [OK] Detekovan VMware server. Pripojuji..." -ForegroundColor Green
+    Write-Host " [OK] Detekovan ESXi server. Pripojuji..." -ForegroundColor Green
 
     try {
         if ($global:DefaultVIServer -and ($global:DefaultVIServer.Name -match $Config.EsxiServer)) {
