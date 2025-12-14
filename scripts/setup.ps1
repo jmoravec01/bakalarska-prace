@@ -5,12 +5,9 @@
 #>
 
 # =============================================================================
-# SKRIPT: setup.ps1
 # POPIS: Konfiguracni pruvodce pro pripravu prostredi pred nasazenim VM.
 #        Skript generuje soubor 'config.json', ktery slouzi jako vstup pro
 #        instalacni skript. Resi pripojeni k ESXi, spravu uloziste a siti.
-# AUTOR: Jakub Moravec
-# DATUM: 2025
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -19,7 +16,7 @@
 function global:prompt { "PS " + (Split-Path -Leaf (Get-Location)) + "> " }
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Funkce: Read-IntSafe
+# Funkce: Read-IntSafe (pripravena vracet default hodnoty funkci)
 function Read-IntSafe {
     param ($Label, $DefaultVal)
     while ($true) {
@@ -339,7 +336,6 @@ if (-not [string]::IsNullOrWhiteSpace($InputRemote)) { $Config.IsoFolder = $Inpu
 # -----------------------------------------------------------------------------
 # 7. ULOZENI KONFIGURACE (EXPORT - OPRAVA PRO MASTER MENU)
 # -----------------------------------------------------------------------------
-# Cesta: ./scripts/config
 $ConfigDir = Join-Path $PSScriptRoot "config"
 
 # Vytvorime slozku config, pokud neexistuje

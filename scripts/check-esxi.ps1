@@ -1,31 +1,32 @@
 <#
 .SYNOPSIS
-   ESXi DASHBOARD & HEALTH CHECK
-   Zobrazi stav serveru, ulozist a virtualnich stroju.
+   PREHLED ESXi SERVERU (DASHBOARD)
 #>
 
 # =============================================================================
-# SKRIPT: check-esxi.ps1
 # POPIS:  Diagnosticky nastroj pro rychlou kontrolu infrastruktury.
 #         Vypisuje vyuziti prostredku, volne misto na discich a stavy VM.
-# AUTOR:  Jakub Moravec
 # =============================================================================
 
+# -----------------------------------------------------------------------------
 # 1. NASTAVENI A KONFIGURACE
-# Protoze je skript v /scripts, config hledame v /scripts/config/config.json
+# -----------------------------------------------------------------------------
+
 $ConfigFile = Join-Path $PSScriptRoot "config\config.json"
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
 
 Clear-Host
-Write-Host "--- ESXi SERVER HEALTH CHECK ---" -ForegroundColor Cyan
+Write-Host "--- PREHLED ESXi SERVERU ---" -ForegroundColor Cyan
 
+# -----------------------------------------------------------------------------
 # 2. NACTENI KONFIGURACE
+# -----------------------------------------------------------------------------
 if (Test-Path $ConfigFile) {
     try {
         $Config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
-    } catch { Write-Host " [CHYBA] Config je poskozeny." -ForegroundColor Red; exit }
+    } catch { Write-Host " [CHYBA] Soubor config.json je poskozeny." -ForegroundColor Red; exit }
 } else {
     Write-Host " [CHYBA] Config nenalezen!" -ForegroundColor Red
     Write-Host "         Hledal jsem zde: $ConfigFile" -ForegroundColor Gray
@@ -33,7 +34,9 @@ if (Test-Path $ConfigFile) {
     exit
 }
 
+# -----------------------------------------------------------------------------
 # 3. PRIPOJENI K SERVERU
+# -----------------------------------------------------------------------------
 if (-not ($global:DefaultVIServer -and $global:DefaultVIServer.IsConnected)) {
     Write-Host " Pripojuji k $($Config.EsxiServer)..." -ForegroundColor Gray
     try {
@@ -45,12 +48,14 @@ if (-not ($global:DefaultVIServer -and $global:DefaultVIServer.IsConnected)) {
     }
 }
 
+# -----------------------------------------------------------------------------
 # 4. INFO O HOST SYSTEMU (Fyzicky server)
+# -----------------------------------------------------------------------------
 $VMHost = Get-VMHost
 $HostCpuUsage = [math]::Round($VMHost.CpuUsageMhz / $VMHost.CpuTotalMhz * 100, 1)
 $HostMemUsage = [math]::Round($VMHost.MemoryUsageGB / $VMHost.MemoryTotalGB * 100, 1)
 
-Write-Host "`n [1] SYSTEMOVE PROSTREDKY (NODE)" -ForegroundColor Yellow
+Write-Host "`n [1] SYSTEMOVE PROSTREDKY (HOST)" -ForegroundColor Yellow
 Write-Host " -----------------------------------------------------------" -ForegroundColor DarkGray
 Write-Host " Server:       " -NoNewline; Write-Host $VMHost.Name -ForegroundColor White
 Write-Host " Verze:        " -NoNewline; Write-Host "$($VMHost.Version) (Build $($VMHost.Build))" -ForegroundColor Gray
@@ -59,31 +64,39 @@ Write-Host " CPU Vyuziti:  " -NoNewline; Write-Host "$HostCpuUsage %" -Foregroun
 Write-Host " RAM Vyuziti:  " -NoNewline; Write-Host "$HostMemUsage % ($([math]::Round($VMHost.MemoryUsageGB,1)) / $([math]::Round($VMHost.MemoryTotalGB,1)) GB)" -ForegroundColor ($HostMemUsage -gt 90 ? "Red" : "Green")
 Write-Host " -----------------------------------------------------------" -ForegroundColor DarkGray
 
-
+# -----------------------------------------------------------------------------
 # 5. KONTROLA ULOZIST (DATASTORES)
+# -----------------------------------------------------------------------------
 Write-Host "`n [2] ULOZISTE (DATASTORES)" -ForegroundColor Yellow
 $Datastores = Get-Datastore | Sort-Object Name
 
 # Priprava dat pro tabulku
 $DSList = @()
 foreach ($ds in $Datastores) {
-    $FreePercent = [math]::Round(($ds.FreeSpaceGB / $ds.CapacityGB) * 100, 1)
+    if ($ds.CapacityGB -gt 0) {
+        $FreePercent = [math]::Round(($ds.FreeSpaceGB / $ds.CapacityGB) * 100, 1)
+    } else {
+        $FreePercent = 0
+    }
     
-    # Status text
-    if ($FreePercent -lt 10) { $Status = "FULL!" } else { $Status = "OK" }
+    if ($FreePercent -lt 5) { $Status = "KRITICKE!" }
+    elseif ($FreePercent -lt 15) { $Status = "PLNE" }
+    else { $Status = "OK" }
 
     $DSList += [PSCustomObject]@{
-        NAZEV    = $ds.Name
+        NAZEV           = $ds.Name
         "KAPACITA (GB)" = [math]::Round($ds.CapacityGB, 1)
         "VOLNO (GB)"    = [math]::Round($ds.FreeSpaceGB, 1)
         "VOLNO (%)"     = "$FreePercent %"
-        STATUS   = $Status
+        STAV            = $Status
     }
 }
 $DSList | Format-Table -AutoSize
 
 
+# -----------------------------------------------------------------------------
 # 6. KONTROLA VIRTUALNICH STROJU
+# -----------------------------------------------------------------------------
 Write-Host "`n [3] VIRTUALNI STROJE (VMs)" -ForegroundColor Yellow
 $VMs = Get-VM | Sort-Object Name
 
@@ -94,18 +107,16 @@ if ($VMs.Count -eq 0) {
     foreach ($vm in $VMs) {
         $IP = if ($vm.Guest.IPAddress) { $vm.Guest.IPAddress[0] } else { "---" }
         
-        # Prevod stavu na text
-        if ($vm.PowerState -eq "PoweredOn") { $State = "RUNNING" } else { $State = "STOPPED" }
+        if ($vm.PowerState -eq "PoweredOn") { $State = "BEZI" } else { $State = "VYPNUTO" }
 
         $VMList += [PSCustomObject]@{
-            NAZEV  = $vm.Name
-            STAV   = $State
-            CPU    = $vm.NumCpu
-            "RAM (MB)" = $vm.MemoryMB
+            NAZEV     = $vm.Name
+            STAV      = $State
+            CPU       = $vm.NumCpu
+            "RAM (MB)"= $vm.MemoryMB
             IP_ADRESA = $IP
         }
     }
-    # Vykresleni tabulky
     $VMList | Format-Table -AutoSize
 }
 

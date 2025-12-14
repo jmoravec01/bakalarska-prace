@@ -8,7 +8,7 @@
 # 0. KONTROLA PROSTREDI
 # -----------------------------------------------------------------------------
 # Overeni, zda bezi PowerShell Core (verze 7.0 a vyssi).
-# Je nutny pro spravnou funkcnost sitovych operaci a JSON parsing.
+# Je nutny pro spravnou funkcnost sitovych operaci a predevsim PowerCLI.
 $MinVersion = [Version]"7.0"
 if ($PSVersionTable.PSVersion -lt $MinVersion) {
     Write-Host " [!] Tento skript vyzaduje PowerShell $MinVersion a novejsi." -ForegroundColor Red;
@@ -22,9 +22,7 @@ if ($PSVersionTable.PSVersion -lt $MinVersion) {
 $ScriptRoot = $PSScriptRoot
 $ScriptsDir = Join-Path $ScriptRoot "scripts"
 
-# VLASTNI PORADI SKRIPTU (LOGICKY TOK)
-# Zde definujeme, v jakem poradi se maji skripty zobrazit v menu.
-# Vsechny ostatni nenalezeny v tomto seznamu se zaradi nakonec abecedne.
+# Nalezeni a nasledny vypis skriptu
 $CustomOrder = @(
     "setup.ps1",
     "check-esxi.ps1",
@@ -36,14 +34,14 @@ $CustomOrder = @(
 # 2. DEFINICE FUNKCI
 # =============================================================================
 
-# Funkce pro efekt psaciho stroje (Animace)
+# Funkce pro efekt psaciho stroje (Animace) - lze odstranit
 function Write-Typewriter {
     param(
         [string]$Text,
         [string]$Color = "Cyan",
         [int]$Speed = 30
     )
-    # Skryjeme kurzor pro cistsi efekt
+
     try { [Console]::CursorVisible = $false } catch {}
 
     $CharArray = $Text.ToCharArray()
@@ -51,9 +49,8 @@ function Write-Typewriter {
         Write-Host $Char -NoNewline -ForegroundColor $Color
         Start-Sleep -Milliseconds $Speed
     }
-    Write-Host "" # Odradkovani
+    Write-Host ""
     
-    # Vratime kurzor
     try { [Console]::CursorVisible = $true } catch {}
 }
 
@@ -72,22 +69,22 @@ function Wait-UserAction {
 Clear-Host
 Write-Host "`n"
 
-# -- ANIMACE START --
+# -- START ANIMACE --
 Write-Typewriter "BAKALARSKA PRACE: AUTOMATIZACE NASAZENI SERVERU" -Color Cyan -Speed 25
 Write-Typewriter "AUTOR: JAKUB MORAVEC" -Color White -Speed 25
 Write-Typewriter "NACITANI MODULU..." -Color DarkGray -Speed 10
 Start-Sleep -Milliseconds 400
 Write-Typewriter "HOTOVO." -Color Green -Speed 10
 Start-Sleep -Seconds 1
-# -- ANIMACE END --
+# -- KONEC ANIMACE --
 
 # =============================================================================
-# 4. HLAVNI SMYCKA (MENU)
+# 4. MENU
 # =============================================================================
 while ($true) {
     Clear-Host
     Write-Host "===============================================================" -ForegroundColor Cyan
-    Write-Host "   MASTER LAUNCHER - RIDICI PULT" -ForegroundColor Cyan
+    Write-Host "   MASTER LAUNCHER - ROZCESTNIK" -ForegroundColor Cyan
     Write-Host "===============================================================" -ForegroundColor Gray
     
     # Kontrola existence slozky se skripty
@@ -114,34 +111,25 @@ while ($true) {
         if ($Found) { [void]$OrderedList.Add($Found) }
     }
     # B) Pridame zbytek abecedne
+    # pripadne lze manualne pridat do $CustomOrder
     $Remaining = $AllFiles | Where-Object { $CustomOrder -notcontains $_.Name } | Sort-Object Name
     foreach ($File in $Remaining) { [void]$OrderedList.Add($File) }
 
     # --- VYPIS POLOZEK ---
     $Index = 1
     foreach ($File in $OrderedList) {
-        # Zkusime precist prvni radek skriptu jako popis (pokud zacina #)
-        $Desc = ""
-        $Header = Get-Content $File.FullName -TotalCount 1
-        if ($Header -match "^#") { 
-            # Odstranime mrizku a mezery
-            $RawDesc = $Header -replace "^#\s*", ""
-            # Zkratime popis, pokud je moc dlouhy
-            if ($RawDesc.Length -gt 50) { $RawDesc = $RawDesc.Substring(0, 47) + "..." }
-            $Desc = "- $RawDesc"
-        }
-
-        # Barva: Zluta pro hlavni skripty, Bila pro ostatni
+        # Barva: Zluta pro hlavni skripty (ty z CustomOrder), Bila pro ostatni
         $Color = if ($CustomOrder -contains $File.Name) { "Yellow" } else { "White" }
 
+        # Vypis: Cislo a Nazev souboru
         Write-Host " $Index. " -NoNewline -ForegroundColor Green
-        Write-Host "$($File.Name) " -NoNewline -ForegroundColor $Color
-        Write-Host "$Desc" -ForegroundColor DarkGray
+        Write-Host "$($File.Name)" -ForegroundColor $Color
+        
         $Index++
     }
 
     Write-Host ""
-    Write-Host " Q. Ukoncit (Quit)" -ForegroundColor Gray
+    Write-Host " Q. Ukoncit " -ForegroundColor Gray
     Write-Host "===============================================================" -ForegroundColor Gray
 
     # --- INTERAKCE S UZIVATELEM ---
