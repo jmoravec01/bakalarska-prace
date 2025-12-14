@@ -14,16 +14,6 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# 0. KONTROLA PROSTREDI
-# -----------------------------------------------------------------------------
-$MinVersion = [Version]"7.0"
-if ($PSVersionTable.PSVersion -lt $MinVersion) {
-    Write-Host " [!] Tento skript vyzaduje PowerShell $MinVersion a novejsi." -ForegroundColor Red;
-    Write-Host " RESENI: Do terminalu napiste prikaz 'pwsh' a stisknete Enter." -ForegroundColor Green
-    exit
-}
-
-# -----------------------------------------------------------------------------
 # 1. POMOCNE FUNKCE A NASTAVENI
 # -----------------------------------------------------------------------------
 function global:prompt { "PS " + (Split-Path -Leaf (Get-Location)) + "> " }
@@ -79,19 +69,62 @@ $Config = [Ordered]@{
 }
 
 # -----------------------------------------------------------------------------
-# 3. PRIPOJENI K ESXi SERVERU
+# 3. PRIPOJENI K ESXi SERVERU (SMART CHECK)
 # -----------------------------------------------------------------------------
-$InputServer = Read-Host "`nZadejte nazev/IP adresu ESXi serveru [$($Config.EsxiServer)]"
-if (-not [string]::IsNullOrWhiteSpace($InputServer)) { $Config.EsxiServer = $InputServer }
+while ($true) {
+    # 1. Zadani IP
+    $InputServer = Read-Host "`nZadejte nazev/IP adresu ESXi serveru [$($Config.EsxiServer)]"
+    if (-not [string]::IsNullOrWhiteSpace($InputServer)) { $Config.EsxiServer = $InputServer }
 
-Write-Host "Pripojuji se k serveru..." -ForegroundColor Gray
-try {
-    if (-not ($global:DefaultVIServer -and $global:DefaultVIServer.IsConnected)) { 
-        Connect-VIServer -Server $Config.EsxiServer -ErrorAction Stop | Out-Null 
+    Write-Host "Analyzuji server..." -ForegroundColor Gray
+    
+    # KROK A: Zakladni Ping (Rychly)
+    if (-not (Test-Connection -ComputerName $Config.EsxiServer -Count 1 -Quiet)) {
+        Write-Host " [CHYBA] IP '$($Config.EsxiServer)' neodpovida na Ping." -ForegroundColor Red
+        if ((Read-Host "Zkusit jinou IP? [A]no/[N]e (Enter=Ano)").ToUpper() -eq "N") { exit }
+        continue
     }
-    Write-Host " [OK] Pripojeno." -ForegroundColor Green
+
+    # KROK B: Test Portu 902 (Specificky pro VMware)
+    # Toto odfiltruje routery, tiskarny a jina zarizeni, ktera sice pingaji, ale nejsou ESXi.
+    try {
+        $Socket = New-Object System.Net.Sockets.TcpClient
+        # Zkusime se pripojit na port 902 s timeoutem 2 sekundy (aby to nezdrzovalo)
+        $Connect = $Socket.BeginConnect($Config.EsxiServer, 902, $null, $null)
+        $Success = $Connect.AsyncWaitHandle.WaitOne(2000, $true)
+
+        if (-not $Success) {
+            Write-Host " [CHYBA] Zarizeni odpovida, ale NENI to ESXi server (Port 902 nedostupny)." -ForegroundColor Red
+            Write-Host "         Pravdepodobne jste zadali IP jineho zarizeni." -ForegroundColor Yellow
+            
+            if ((Read-Host "Chcete se presto zkusit pripojit? [A]no/[N]e").ToUpper() -ne "A") { 
+                continue 
+            }
+        }
+        $Socket.Close()
+    } 
+    catch { 
+        # Ignorujeme chyby socketu, resi to podminka vyse
+    }
+
+    # KROK C: Prihlaseni (jen pokud prosly testy)
+    Write-Host " [OK] Detekovan VMware server. Pripojuji..." -ForegroundColor Green
+
+    try {
+        if ($global:DefaultVIServer -and ($global:DefaultVIServer.Name -match $Config.EsxiServer)) {
+             Write-Host " [OK] Jiz pripojeno." -ForegroundColor Green
+             break
+        }
+
+        Connect-VIServer -Server $Config.EsxiServer -ErrorAction Stop | Out-Null
+        Write-Host " [OK] Pripojeno uspesne." -ForegroundColor Green
+        break
+    }
+    catch {
+        Write-Host " [CHYBA] Prihlaseni selhalo (Spatne jmeno/heslo)!" -ForegroundColor Red
+        if ((Read-Host "Zkusit znovu? [A]no/[N]e").ToUpper() -eq "N") { exit }
+    }
 }
-catch { Write-Host " [CHYBA] Server nedostupny." -ForegroundColor Red }
 
 # -----------------------------------------------------------------------------
 # 4. DETEKCE DISKU A VYBER DATASTORE

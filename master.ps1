@@ -4,6 +4,18 @@
    Rozcestnik pro spousteni vsech podrizernych skriptu v projektu.
 #>
 
+# -----------------------------------------------------------------------------
+# 0. KONTROLA PROSTREDI
+# -----------------------------------------------------------------------------
+# Overeni, zda bezi PowerShell Core (verze 7.0 a vyssi).
+# Je nutny pro spravnou funkcnost sitovych operaci a JSON parsing.
+$MinVersion = [Version]"7.0"
+if ($PSVersionTable.PSVersion -lt $MinVersion) {
+    Write-Host " [!] Tento skript vyzaduje PowerShell $MinVersion a novejsi." -ForegroundColor Red;
+    Write-Host " RESENI: Do terminalu napiste prikaz 'pwsh' a stisknete Enter." -ForegroundColor Green
+    exit
+}
+
 # =============================================================================
 # 1. NASTAVENI A KONFIGURACE
 # =============================================================================

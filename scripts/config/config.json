@@ -3,22 +3,22 @@
   "Datastore": "datastore1",
   "Network": "VM Network",
   "IsoFolder": "ISOs",
-  "LocalIsoDir": "C:\\ISO",
+  "LocalIsoDir": "/home/uzivatel/ISO",
   "Profiles": {
-    "Low": {
-      "CpuCount": 1,
-      "DiskGB": 20,
-      "RamMB": 2048
+    "High": {
+      "DiskGB": 100,
+      "RamMB": 8192,
+      "CpuCount": 4
     },
     "Mid": {
-      "CpuCount": 2,
       "DiskGB": 50,
-      "RamMB": 4096
+      "RamMB": 4096,
+      "CpuCount": 2
     },
-    "High": {
-      "CpuCount": 4,
-      "DiskGB": 100,
-      "RamMB": 8192
+    "Low": {
+      "DiskGB": 20,
+      "RamMB": 2048,
+      "CpuCount": 1
     }
   }
 }
