@@ -113,7 +113,7 @@ if ($VMs.Count -eq 0) {
             NAZEV     = $vm.Name
             STAV      = $State
             CPU       = $vm.NumCpu
-            "RAM (MB)"= $vm.MemoryMB
+            "RAM (MB)" = [int]$vm.MemoryMB
             IP_ADRESA = $IP
         }
     }
