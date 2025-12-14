@@ -89,7 +89,6 @@ function Get-RockyVersion {
 
 $Ver10 = Get-RockyVersion -MajorVer "10"
 $Ver9  = Get-RockyVersion -MajorVer "9"
-$Ver8  = Get-RockyVersion -MajorVer "8"
 
 # -----------------------------------------------------------------------------
 # 5. INTERAKTIVNI VYBER VERZE A EDICE
@@ -97,15 +96,13 @@ $Ver8  = Get-RockyVersion -MajorVer "8"
 Write-Host "`nDostupne verze (Enterprise LTS):"
 Write-Host " [1] Rocky Linux $Ver10 (Experimental)" -ForegroundColor Magenta
 Write-Host " [2] Rocky Linux $Ver9  (Doporuceno)" -ForegroundColor Green
-Write-Host " [3] Rocky Linux $Ver8  (Legacy)" -ForegroundColor Gray
 
-$VerChoice = Read-Host "`nVyberte verzi (1-3) [Enter = 2]"
+$VerChoice = Read-Host "`nVyberte verzi (1-2) [Enter = 2]"
 if ([string]::IsNullOrWhiteSpace($VerChoice)) { $VerChoice = "2" }
 
 switch ($VerChoice) {
     "1" { $SelectedMajor = "10"; $SelectedFullVer = $Ver10 }
     "2" { $SelectedMajor = "9";  $SelectedFullVer = $Ver9 }
-    "3" { $SelectedMajor = "8";  $SelectedFullVer = $Ver8 }
     Default { Write-Host "Neplatna volba."; exit }
 }
 

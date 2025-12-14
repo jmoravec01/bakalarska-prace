@@ -70,7 +70,7 @@ Write-Host " -----------------------------------------------------------" -Foreg
 Write-Host "`n [2] ULOZISTE (DATASTORES)" -ForegroundColor Yellow
 $Datastores = Get-Datastore | Sort-Object Name
 
-# Priprava dat pro tabulku
+# Priprava dat
 $DSList = @()
 foreach ($ds in $Datastores) {
     if ($ds.CapacityGB -gt 0) {
@@ -79,9 +79,19 @@ foreach ($ds in $Datastores) {
         $FreePercent = 0
     }
     
-    if ($FreePercent -lt 5) { $Status = "KRITICKE!" }
-    elseif ($FreePercent -lt 15) { $Status = "PLNE" }
-    else { $Status = "OK" }
+    # Logika stavů
+    if ($FreePercent -lt 25) { 
+        # 0% - 25% volného místa
+        $Status = "KRITICKE!" 
+    }
+    elseif ($FreePercent -lt 75) { 
+        # 25% - 75% volného místa
+        $Status = "OK" 
+    }
+    else { 
+        # 75% - 100% volného místa
+        $Status = "NEVYUZITO" 
+    }
 
     $DSList += [PSCustomObject]@{
         NAZEV           = $ds.Name
@@ -91,8 +101,30 @@ foreach ($ds in $Datastores) {
         STAV            = $Status
     }
 }
-$DSList | Format-Table -AutoSize
 
+# --- Vykreslení kompaktní tabulky ---
+
+# 1. Hlavička
+# Upraveno: NAZEV (-15), KAPACITA (10), VOLNO (10), VOLNO (%) (11), STAV (10)
+Write-Host ("{0,-15} {1,10} {2,10} {3,11} {4,10}" -f "NAZEV", "KAPACITA", "VOLNO", "VOLNO (%)", "STAV")
+Write-Host ("-" * 60)
+
+# 2. Výpis řádků
+foreach ($row in $DSList) {
+    # Určení barvy
+    if ($row.STAV -eq "KRITICKE!") {
+        $Color = "Red"
+    } elseif ($row.STAV -eq "PLNE") {
+        $Color = "Yellow"
+    } else {
+        $Color = "Green"
+    }
+
+    Write-Host ("{0,-15} {1,10} {2,10} {3,11} " -f $row.NAZEV, $row."KAPACITA (GB)", $row."VOLNO (GB)", $row."VOLNO (%)") -NoNewline
+    
+    # Stav barevně
+    Write-Host ("{0,10}" -f $row.STAV) -ForegroundColor $Color
+}
 
 # -----------------------------------------------------------------------------
 # 6. KONTROLA VIRTUALNICH STROJU
