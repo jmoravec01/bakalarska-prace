@@ -82,7 +82,7 @@ foreach ($ds in $Datastores) {
     # Logika stavů
     if ($FreePercent -lt 25) { 
         # 0% - 25% volného místa
-        $Status = "KRITICKE!" 
+        $Status = "KRITICKE" 
     }
     elseif ($FreePercent -lt 75) { 
         # 25% - 75% volného místa
@@ -112,9 +112,9 @@ Write-Host ("-" * 60)
 # 2. Výpis řádků
 foreach ($row in $DSList) {
     # Určení barvy
-    if ($row.STAV -eq "KRITICKE!") {
+    if ($row.STAV -eq "KRITICKE") {
         $Color = "Red"
-    } elseif ($row.STAV -eq "PLNE") {
+    } elseif ($row.STAV -eq "OK") {
         $Color = "Yellow"
     } else {
         $Color = "Green"

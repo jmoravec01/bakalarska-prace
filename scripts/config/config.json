@@ -6,19 +6,19 @@
   "LocalIsoDir": "C:\\ISO",
   "Profiles": {
     "High": {
-      "DiskGB": 100,
-      "CpuCount": 4,
-      "RamMB": 8192
+      "DiskGB": 60,
+      "RamMB": 8192,
+      "CpuCount": 4
     },
     "Low": {
       "DiskGB": 20,
-      "CpuCount": 1,
-      "RamMB": 2048
+      "RamMB": 2048,
+      "CpuCount": 1
     },
     "Mid": {
       "DiskGB": 50,
-      "CpuCount": 2,
-      "RamMB": 4096
+      "RamMB": 4096,
+      "CpuCount": 2
     }
   }
 }

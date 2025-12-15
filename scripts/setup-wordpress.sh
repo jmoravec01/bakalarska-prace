@@ -136,7 +136,7 @@ EOF
 
 # --- 8. FINALIZACE ---
 echo ">>> [7/7] Firewall, SELinux a Restart..."
-firewall-cmd --permanent --add-service=http
+firewall-cmd --permanent --add-service=http 
 firewall-cmd --permanent --add-service=https
 firewall-cmd --reload 2>/dev/null || true
 
@@ -152,5 +152,4 @@ systemctl restart mariadb
 
 echo "==========================================================="
 echo " USPESNE DOKONCENO!"
-echo " IP ADRESA: $(curl -s ifconfig.me)"
 echo "==========================================================="
